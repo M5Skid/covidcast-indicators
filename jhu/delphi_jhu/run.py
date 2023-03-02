@@ -17,8 +17,8 @@ from delphi_utils import (
     get_structured_logger,
 )
 
-from .geo import geo_map
-from .pull import pull_jhu_data
+from geo import geo_map
+from pull import pull_jhu_data
 
 # global constants
 METRICS = [
