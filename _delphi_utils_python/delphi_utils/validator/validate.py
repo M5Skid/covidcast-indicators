@@ -45,6 +45,7 @@ class Validator:
         self.dynamic_validation = DynamicValidator(validation_params)
 
     def validate(self):
+        #import pdb
         """
         Run all data checks.
 
@@ -59,6 +60,7 @@ class Validator:
                                      self.time_window.end_date)
         self.static_validation.validate(frames_list, report)
         # Dynamic Validation only performed when frames_list is populated
+        #pdb.set_trace()
         if len(frames_list) > 0:
             self.dynamic_validation.validate(aggregate_frames(frames_list), report)
         return report

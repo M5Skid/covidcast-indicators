@@ -63,7 +63,7 @@ class StaticValidator:
         """
         self.check_empty_filelist(file_list, report)
         # Only check for missing date files if the file list is nonempty.
-        if len(file_list > 0):
+        if len(file_list) > 0:
             self.check_missing_date_files(file_list, report)
 
         # Individual file checks
@@ -82,11 +82,11 @@ class StaticValidator:
     def check_empty_filelist(self, daily_filenames, report):
         """
         Check the list of csv export files to see if it is empty.
-
         If data set is empty, validation can throw an error if not suppressed.
-        Example from params.json:
+
+        Example from params.json (must be a list):
         "suppressed_errors": [
-        "check_name": "check_empty_filelist"
+          {"check_name": "check_empty_filelist"}
         ]
 
         Arguments:
