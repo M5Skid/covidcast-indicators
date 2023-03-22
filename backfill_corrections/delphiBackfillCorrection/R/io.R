@@ -13,15 +13,15 @@ read_data <- function(input_file) {
 #' Make sure data contains a `geo_value` field
 #'
 #' @template df-template
-#'
-#' @importFrom dplyr rename %>%
-#' @importFrom rlang .data
 fips_to_geovalue <- function(df) {
   if ( !("geo_value" %in% colnames(df)) ) {
     if ( !("fips" %in% colnames(df)) ) {
       stop("Either `fips` or `geo_value` field must be available")
     }
-    df <- rename(df, geo_value = .data$fips)
+    df$geo_value <- df$fips
+  }
+  if ( "fips" %in% colnames(df) ) {
+    df$fips <- NULL
   }
   return(df)
 }
@@ -60,10 +60,10 @@ export_test_result <- function(test_data, coef_data, indicator, signal,
   dir.create(file.path(export_dir, signal_dir), showWarnings = FALSE)
   
   if (nrow(test_data) == 0) {
-    warning(str_interp("No test data available for ${signal_info}"))
+    warning("No test data available for ", signal_info)
   } else {
-    msg_ts(str_interp("Saving predictions to disk for ${signal_info} "))
-    pred_output_file <- str_interp("prediction_${base_name}")
+    msg_ts("Saving predictions to disk for ", signal_info)
+    pred_output_file <- paste0("prediction_", base_name)
     
     prediction_col <- colnames(test_data)[grepl("^predicted", colnames(test_data))]
     expected_col <- c("time_value", "issue_date", "lag", "geo_value", 
@@ -72,10 +72,10 @@ export_test_result <- function(test_data, coef_data, indicator, signal,
   }
   
   if (nrow(coef_data) == 0) {
-    warning(str_interp("No coef data available for ${signal_info}"))
+    warning("No coef data available for ", signal_info)
   } else {
-    msg_ts(str_interp("Saving coefficients to disk for ${signal_info}"))
-    coef_output_file <- str_interp("coefs_${base_name}")
+    msg_ts("Saving coefficients to disk for ", signal_info)
+    coef_output_file <- paste0("coefs_", base_name)
     write_csv(coef_data, file.path(export_dir, signal_dir, coef_output_file))
   }
 }
@@ -217,4 +217,73 @@ create_name_pattern <- function(indicator, signal,
          daily = str_interp("${indicator}_${signal}_as_of_[0-9]{8}[.]parquet$"),
          rollup = str_interp("${indicator}_${signal}_from_[0-9]{8}_to_[0-9]{8}[.]parquet$")
   )
+}
+
+#' Get date range of data to use for training models
+#'
+#' Calculate training start and end dates based on user settings.
+#' `training_start_date` is the minimum allowed target date when selecting
+#' training data to use. `training_end_date` is the maximum allowed target
+#' date and maximum allowed issue date.
+#'
+#' Cases:
+#'   1. We are training new models.
+#'   2. We are not training new models and cached models exist.
+#'   3. We are not training new models and cached models don't exist.
+#'
+#' Sometimes we want to allow the user to specify an end date in
+#' params that overrides the automatically-generated end date. This is
+#' only relevant when the user requests to train new models.
+#'
+#' @template params-template
+#'
+#' @importFrom stringr str_interp
+get_training_date_range <- function(params) {
+  default_end_date <- TODAY - params$testing_window + 1
+
+  if (params$train_models) {
+    if (params_element_exists_and_valid(params, "training_end_date")) {
+      # Use user-provided end date.
+      training_end_date <- as.Date(params$training_end_date)
+    } else {
+      # Default end date is today.
+      training_end_date <- default_end_date
+    }
+  } else {
+    # Get end date from cached model files. Assumes filename format like
+    # `20220628_20220529_changehc_covid_state_lambda0.1_count_ca_lag5_tau0.9.model`
+    # where the leading date is the training end date for that model, and the
+    # second date is the training start date.
+    model_files <- list.files(params$cache_dir, "^20[0-9]{6}_20[0-9]{6}.*[.]model$")
+    if (params$indicators != "all") {
+      # If an single indicator is specified via the command-line
+      # `--indicators` argument, the training end date from available model
+      # files for only that indicator will be used. This means that model
+      # training date ranges may not match across all indicators.
+      model_files <- list.files(
+        params$cache_dir,
+        str_interp("^20[0-9]{6}_20[0-9]{6}_${params$indicators}.*[.]model$")
+      )
+    }
+    if (length(model_files) == 0) {
+      # We know we'll be retraining models today.
+      training_end_date <- default_end_date
+    } else {
+      # If only some models are in the cache, they will be used and those
+      # missing will be regenerated as-of the training end date.
+      training_end_date <- max(as.Date(substr(model_files, 1, 8), "%Y%m%d"))
+    }
+  }
+
+  # Calculate start date instead of reading from cached files. This assumes
+  # that the user-provided `params$training_days` is more up-to-date. If
+  # `params$training_days` has changed such that for a given training end
+  # date, the calculated training start date differs from the start date
+  # referenced in cached file names, then those cached files will not be used.
+  training_start_date <- training_end_date - params$training_days
+
+  return(list(
+    "training_start_date"=training_start_date,
+    "training_end_date"=training_end_date
+  ))
 }

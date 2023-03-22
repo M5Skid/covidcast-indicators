@@ -5,7 +5,7 @@
 #' @param geo_train_data training data for a certain location
 #' @param geo_test_data testing data for a certain location
 #' 
-#' @importFrom rlang .data .env
+#' @importFrom dplyr filter
 #'
 #' @export
 data_filteration <- function(test_lag, geo_train_data, geo_test_data, lag_pad) {
@@ -22,12 +22,14 @@ data_filteration <- function(test_lag, geo_train_data, geo_test_data, lag_pad) {
     test_lag_pad1=8
     test_lag_pad2=9
   }
-  train_data = geo_train_data %>% 
-    filter(.data$lag >= .env$test_lag - .env$test_lag_pad ) %>%
-    filter(.data$lag <= .env$test_lag + .env$test_lag_pad )
-  test_data = geo_test_data %>%
-    filter(.data$lag >= .env$test_lag - .env$test_lag_pad1 ) %>%
-    filter(.data$lag <= .env$test_lag + .env$test_lag_pad2)
+  train_data = filter(geo_train_data,
+    lag >= test_lag - test_lag_pad,
+    lag <= test_lag + test_lag_pad
+  )
+  test_data = filter(geo_test_data,
+    lag >= test_lag - test_lag_pad1,
+    lag <= test_lag + test_lag_pad2
+  )
 
   return (list(train_data, test_data))
 }
@@ -93,7 +95,6 @@ add_sqrtscale<- function(train_data, test_data, max_raw, value_col) {
 #' @template training_start_date-template
 #'
 #' @importFrom stats predict coef
-#' @importFrom stringr str_interp
 #'
 #' @export
 model_training_and_testing <- function(train_data, test_data, taus, covariates,
@@ -130,7 +131,7 @@ model_training_and_testing <- function(train_data, test_data, taus, covariates,
 
         success = success + 1
       },
-      error=function(e) {msg_ts(str_interp("Training failed for ${model_path}"))}
+      error=function(e) {msg_ts("Training failed for ", model_path)}
     )
   }
   if (success < length(taus)) {return (NULL)}
@@ -161,18 +162,34 @@ model_training_and_testing <- function(train_data, test_data, taus, covariates,
 evaluate <- function(test_data, taus) {
   n_row = nrow(test_data)
   taus_list = as.list(data.frame(matrix(replicate(n_row, taus), ncol=n_row)))
-  
+  pred_cols = paste0("predicted_tau", taus)
+
   # Calculate WIS
-  predicted_all = as.matrix(test_data[c("predicted_tau0.01", "predicted_tau0.025",
-                                        "predicted_tau0.1", "predicted_tau0.25",
-                                        "predicted_tau0.5", "predicted_tau0.75",
-                                        "predicted_tau0.9", "predicted_tau0.975",
-                                        "predicted_tau0.99")])
-  predicted_all_exp = exp(predicted_all)
+  predicted_all = as.matrix(test_data[, pred_cols])
   predicted_trans = as.list(data.frame(t(predicted_all - test_data$log_value_target)))
   test_data$wis = mapply(weighted_interval_score, taus_list, predicted_trans, 0)
-  
+
   return (test_data)
+}
+
+#' Un-log predicted values
+#'
+#' @param test_data dataframe with a column containing the prediction results of
+#'    each requested quantile. Each row represents an update with certain
+#'    (reference_date, issue_date, location) combination.
+#' @template taus-template
+#'
+#' @importFrom dplyr bind_cols select starts_with
+exponentiate_preds <- function(test_data, taus) {
+  pred_cols = paste0("predicted_tau", taus)
+
+  # Drop original predictions and join on exponentiated versions
+  test_data = bind_cols(
+    select(test_data, -starts_with("predicted")),
+    exp(test_data[, pred_cols])
+  )
+
+  return(test_data)
 }
 
 #' Train model using quantile regression with Lasso penalty, or load from disk
@@ -186,12 +203,11 @@ evaluate <- function(test_data, taus) {
 #' @template train_models-template
 #'
 #' @importFrom quantgen quantile_lasso
-#' @importFrom stringr str_interp
 get_model <- function(model_path, train_data, covariates, tau,
             lambda, lp_solver, train_models) {
   if (train_models || !file.exists(model_path)) {
     if (!train_models && !file.exists(model_path)) {
-      warning(str_interp("user requested use of cached model but file {model_path}"),
+      warning("user requested use of cached model but file ", model_path,
         " does not exist; training new model")
     }
     # Quantile regression
@@ -205,7 +221,7 @@ get_model <- function(model_path, train_data, covariates, tau,
   } else {
     # Load model from cache invisibly. Object has the same name as the original
     # model object, `obj`.
-    msg_ts(str_interp("Loading from ${model_path}"))
+    msg_ts("Loading from ", model_path)
     load(model_path)
   }
 
@@ -232,21 +248,19 @@ get_model <- function(model_path, train_data, covariates, tau,
 #'
 #' @return path to file containing model object
 #'
-#' @importFrom stringr str_interp
-#' 
 generate_filename <- function(indicator, signal, 
                               geo_level, signal_suffix, lambda,
                               training_end_date, training_start_date, geo="",
                               value_type = "", test_lag="", tau="", dw="",
                               beta_prior_mode = FALSE, model_mode = TRUE) {
   if (lambda != "") {
-    lambda <- str_interp("lambda${lambda}")
+    lambda <- paste0("lambda", lambda)
   }
   if (test_lag != "") {
-    test_lag <- str_interp("lag${test_lag}")
+    test_lag <- paste0("lag", test_lag)
   }
   if (tau != "") {
-    tau <- str_interp("tau${tau}")
+    tau <- paste0("tau", tau)
   }
   if (beta_prior_mode) {
     beta_prior <- "beta_prior"
@@ -270,61 +284,4 @@ generate_filename <- function(indicator, signal,
     file_type
   )
   return(filename)
-}
-
-#' Get date range of data to use for training models
-#'
-#' Calculate training start and end dates based on user settings.
-#' `training_start_date` is the minimum allowed target date when selecting
-#' training data to use. `training_end_date` is the maximum allowed target
-#' date and maximum allowed issue date.
-#'
-#' Cases:
-#'   1. We are training new models.
-#'   2. We are not training new models and cached models exist.
-#'   3. We are not training new models and cached models don't exist.
-#'
-#' Sometimes we want to allow the user to specify an end date in
-#' params that overrides the automatically-generated end date. This is
-#' only relevant when the user requests to train new models.
-#'
-#' @template params-template
-get_training_date_range <- function(params) {
-  default_end_date <- TODAY - params$testing_window + 1
-
-  if (params$train_models) {
-    if (params_element_exists_and_valid(params, "training_end_date")) {
-      # Use user-provided end date.
-      training_end_date <- as.Date(params$training_end_date)
-    } else {
-      # Default end date is today.
-      training_end_date <- default_end_date
-    }
-  } else {
-    # Get end date from cached model files. Assumes filename format like
-    # `20220628_20220529_changehc_covid_state_lambda0.1_count_ca_lag5_tau0.9.model`
-    # where the leading date is the training end date for that model, and the
-    # second date is the training start date.
-    model_files <- list.files(params$cache_dir, "^202[0-9]{5}_202[0-9]{5}.*[.]model$")
-    if (length(model_files) == 0) {
-      # We know we'll be retraining models today.
-      training_end_date <- default_end_date
-    } else {
-      # If only some models are in the cache, they will be used and those
-      # missing will be regenerated as-of the training end date.
-      training_end_date <- max(as.Date(substr(model_files, 1, 8), "%Y%m%d"))
-    }
-  }
-
-  # Calculate start date instead of reading from cached files. This assumes
-  # that the user-provided `params$training_days` is more up-to-date. If
-  # `params$training_days` has changed such that for a given training end
-  # date, the calculated training start date differs from the start date
-  # referenced in cached file names, then those cached files will not be used.
-  training_start_date <- training_end_date - params$training_days
-
-  return(list(
-    "training_start_date"=training_start_date,
-    "training_end_date"=training_end_date
-  ))
 }
