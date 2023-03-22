@@ -25,7 +25,7 @@ class TestCheckMissingDates:
         report = ValidationReport([])
 
         filenames = list()
-        validator.check_missing_date_files(filenames, report)
+        validator.check_empty_filelist(filenames, report)
 
         assert len(report.raised_errors) == 1
         assert report.raised_errors[0].check_name == "check_empty_filelist"

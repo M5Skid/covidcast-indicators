@@ -61,7 +61,10 @@ class StaticValidator:
         report: ValidationReport
             report to which the results of these checks will be added
         """
-        self.check_missing_date_files(file_list, report)
+        self.check_empty_filelist(file_list, report)
+        # Only check for missing date files if the file list is nonempty.
+        if len(file_list > 0):
+            self.check_missing_date_files(file_list, report)
 
         # Individual file checks
         # For every daily file, read in and do some basic format and value checks.
@@ -76,6 +79,30 @@ class StaticValidator:
             self.check_bad_se(data_df, filename, report)
             self.check_bad_sample_size(data_df, filename, report)
 
+    def check_empty_filelist(self, daily_filenames, report):
+        """
+        Check the list of csv export files to see if it is empty.
+
+        If data set is empty, validation can throw an error if not suppressed.
+        Example from params.json:
+        "suppressed_errors": [
+        "check_name": "check_empty_filelist"
+        ]
+
+        Arguments:
+            - daily_filenames: List[Tuple(str, re.match, pd.DataFrame)]
+                triples of filenames, filename matches with the geo regex, and the data from the
+                file
+            - report: ValidationReport; report where results are added
+
+        Returns:
+            - None
+        """
+        if len(daily_filenames) == 0:
+            report.add_raised_error(
+                ValidationFailure("check_empty_filelist",
+                                  message="No files found in export directory"))
+        report.increment_total_checks()
 
     def check_missing_date_files(self, daily_filenames, report):
         """
@@ -90,36 +117,29 @@ class StaticValidator:
         Returns:
             - None
         """
-        # Check to see if there are any files in the export directory
-        # Validator will throw an error if the directory is empty, which can be suppressed
-        if len(daily_filenames) == 0:
-            report.add_raised_error(
-                ValidationFailure("check_empty_filelist",
-                                  message="No files found in export directory"))
         # Check for missing date only happens when files are found
+        # Create set of all dates seen in CSV names.
+        unique_dates = {datetime.strptime(
+            daily_filename[0][0:8], '%Y%m%d').date() for daily_filename in daily_filenames}
+        # Diff expected and observed dates.
+        expected_dates = self.params.time_window.date_seq
+        if len(self.params.max_expected_lag) == 0:
+            max_expected_lag_overall = 10
         else:
-            # Create set of all dates seen in CSV names.
-            unique_dates = {datetime.strptime(
-                daily_filename[0][0:8], '%Y%m%d').date() for daily_filename in daily_filenames}
-            # Diff expected and observed dates.
-            expected_dates = self.params.time_window.date_seq
-            if len(self.params.max_expected_lag) == 0:
-                max_expected_lag_overall = 10
-            else:
-                max_expected_lag_overall = max(self.params.max_expected_lag.values())
+            max_expected_lag_overall = max(self.params.max_expected_lag.values())
 
-            # Only check for date if it should definitely be present,
-            # i.e if it is more than max_expected_lag since the checking date
-            expected_dates = [date for date in expected_dates if
-                ((datetime.today().date() - date).days) > max_expected_lag_overall]
-            check_dateholes = list(set(expected_dates).difference(unique_dates))
-            check_dateholes.sort()
+        # Only check for date if it should definitely be present,
+        # i.e if it is more than max_expected_lag since the checking date
+        expected_dates = [date for date in expected_dates if
+            ((datetime.today().date() - date).days) > max_expected_lag_overall]
+        check_dateholes = list(set(expected_dates).difference(unique_dates))
+        check_dateholes.sort()
 
-            if check_dateholes:
-                report.add_raised_error(
-                    ValidationFailure("check_missing_date_files",
-                                  message="Missing dates are observed; if these dates are already "
-                                          "in the API they would not be updated"))
+        if check_dateholes:
+            report.add_raised_error(
+                ValidationFailure("check_missing_date_files",
+                    message="Missing dates are observed; if these dates are already "
+                    "in the API they would not be updated"))
 
         report.increment_total_checks()
 
