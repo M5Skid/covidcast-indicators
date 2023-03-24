@@ -1,32 +1,37 @@
 # Quidel Covidtest Notes
-This is a working document designed to compile information into a user friendly FAQ style guide
+This is a working document designed to compile information into a user friendly FAQ style guide. 
 
 ## Intro
 Quidel sources information based on covid antigen test data. Signal data consists of percentages of antigen tests that were positive for covid.
 
-### Signals
+### Signal Breakdown
+- Most in the form of `covid_ag_...` because it is the same statistic across different groups.
 - Ex: `covid_ag_raw_pct_positive_age_18_49`
-- Split up by various age groups
-- Both a smoothed and raw signal are created for each group
+- Split up by various age and geographic groups.
+- Both a smoothed and raw signal are created for each group.
 
 ### Data Collection
-- Python module connects to AWS 
-- Requires AWS access key and ID (Separate from archive differ)
+- Python module connects to AWS. 
+- Requires AWS access key and ID (Separate from archive credentials).
+- [Question] How do we connect to it? Is this on Delphi's server?
 
 ## Running the Indicator
-The module name and venv/makefile information should be in the quidel_covidtest directory. Provided the params are specified, the indicator can be run in a local environment.
+The module name and venv/makefile information should be in the `README.md`. Provided the params are specified and the necessary packages installed, the indicator can be run in a local environment.
+- Run time is dependent on the length of pull/export window, which should be kept to a minimum
+- If ran with `delphi_utils.runner`, validator and archive will also add time to the run.
 
 ### Directory Structure
-The "quidel_covidtest" indicator directory is expected to have the following subdirectories and files. Many can be overwritten in params.json (see below)
+The `quidel_covidtest/` indicator directory is expected to have the following subdirectories and files. Many can be overwritten in params.json (see below).
 
 Run Module
-- `delphi_quidel_covidtest/` - contains indicator code
+- `delphi_quidel_covidtest/` - Contains indicator code.
+- [Thought] A simple code breakdown would be great, but a massive timesink.
 
 Functional Directories/Files
-- `backfill/` - backfill dir for parquet files
-- `cache/` - input cache for pulled data
-- `receiving/` - contains .csv export, also delivery dir for acquisition
-- `logs/quidel-covidtest.log` - module log printed by structured logger. Will contain additional logging if delphi_utils functions are run on the indicator (like validator)
+- `backfill/` - Backfill dir for parquet files.
+- `cache/` - Input cache for pulled data.
+- `receiving/` - Contains csv export files.
+- `logs/quidel-covidtest.log` - mMdule log printed by structured logger. Will contain additional logging if delphi_utils functions are run on the indicator (like validator)
 - `params.json` and `params.json.template` - user set parameters
 
 ### Parameter Notes
@@ -58,22 +63,27 @@ The `params` argument is expected to have the following structure:
 ```
 
 Most param keys can be obtained from the template as long as the directories and files exist
--  Aws creds must be obtained legitimately
+- Use `cp params.json.template params.json`
+- AWS creds must be obtained legitimately; the indicator will fail without them.
 
-Setting dates:
-- pull start/end dates refer to the date range of input data obtained from quidel
-- export start/end dates refer to csv export dates used in the create_export_csv_function
-- Latest exported file date will 5 days before the export_end_date; if set to null it will be 5 days before the current time
-- It is advisable to keep the length between start and end dates to a minimum to save time (but >= 40 days or export_day_range if patching)
+### Setting Dates
+- Pull start/end dates refer to the date range of input data obtained from Quidel.
+- Export start/end dates refer to csv export dates used in the `create_export_csv` function.
+- Latest exported file date will 5 days before the `export_end_date`; if set to null it will be 5 days before the current time.
+- It is advisable to keep the length between start and end dates to a minimum to save time (but >= 40 days or `export_day_range` if patching).
 
 ## Patching - Specific to Quidel
 
-There are no restrictions to running the indicator with the proper credentials.	Issues batches are 40 days (should be the default for export_day_range in params).
+There are no restrictions to running the indicator with the proper credentials.	Issues batches are 40 days (should be the default for `export_day_range` in params).
+  - You will need the AWS credentials for both the Quidel source data and the S3 cache to perform patching.
 
 ### Directory
-[name-of-batch]/issue_[patch-date]/quidel
-- contains archive diff'd csv files
-- dates should match with database (40 day length, see below)
+Batches uploaded must look like this:
+
+`[name-of-batch]/issue_[patch-date]/quidel/`
+- Ex: `patch_quidel_dec/issue_20221212/quidel/`
+- Contains archive diff'd csv files.
+- Dates should match with database (40 day length, see below).
 
 ### Database
 Issue batch date ranges can be viewed in the database with the command:
@@ -81,10 +91,10 @@ Issue batch date ranges can be viewed in the database with the command:
 ```
 select issue, max(time_value), min(time_value) from epimetric_full_v where source="quidel" and `signal`="covid_ag_raw_pct_positive" and time_type="day" and geo_type="state" and issue>=20230301 and issue<=20230312 group by issue order by issue;
 ```
-The signal, time_type, geo_type, and dates can be adjusted.
-- check the API for a breakdown of combinations
+The `signal`, `geo_type`, and date ranges can be adjusted.
+- check the API for a breakdown of combinations relevant to Quidel signals.
 
-Here is part of the above command:
+Here is part of results the above command:
 ```
 +----------+-----------------+-----------------+
 | issue    | max(time_value) | min(time_value) |
@@ -98,12 +108,12 @@ Here is part of the above command:
 ```
 
 ## Archive
-Quidel utilizes the s3 archive in production with indicator prefix quidel
-- Archive requires parameters section
-- common section needs the export dir
+Quidel utilizes the S3 archiver in production with indicator prefix `quidel`.
+- `params.json` requires `archive` section (see below).
+- `common` section needs the `export_dir`, but `log_filename` can and should be used to aid in the case of issues.
 
 ### S3 Archive
-S3 archive differ should mainly be used by the production environment during a scheduled indicator run (not a manual run). Here are the params:
+S3 archive differ should mainly be used by the production environment during a scheduled indicator run (not a manual run) as items in the S3 cache can be overwritten. Here are the archive params:
 ```
 "common": {
     "export_dir": "receiving",
@@ -119,15 +129,22 @@ S3 archive differ should mainly be used by the production environment during a s
   "indicator_prefix": "quidel"
 }
 ```
-NOTE: AWS keys need obtained from staging.
-The `common` section must also include `export_dir` (`log_filename` is always recommended)
+NOTES: 
+- AWS keys need obtained legitimately (redacted here).
+- These parameters will be needed to obtain the S3 cache for patching, but running `versions.py` will not overwrite in the case or archiving.
 
 ### Filesystem Archive
-To use filesystem differ, the only key in `archive` should be the cache_dir. `export_dir` key is still needed to perform archiving.
+To use filesystem differ, the only key in `archive` should be the `cache_dir`. 
+`export_dir` key is still needed to perform archiving (`log_filename` is optional).
 
-# Other Notes
-- validator
+- This is used to cread archive diffed files for patch batch uploads.
+- May have other uses (testing/troubleshooting).
+
+# Other Notes to Add
+- Validator and its parameters/functions.
 - Backfill has new changes that may adjust setting params.
-- common issues
-	
+- Common issues
+
+# The Question 
+Should this be more organized or split up? I tried to avoid redundancy with the other notes and the API docs, but it always helps me having a "catch-all" document. Markdown looks better than expected, too.
 
