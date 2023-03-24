@@ -16,18 +16,18 @@ Quidel sources information based on covid antigen test data. Signal data consist
 - [Question] How do we connect to it? Is this on Delphi's server?
 
 ## Running the Indicator
-The module name and venv/makefile information should be in the `README.md`. Provided the parameters are specified and the necessary packages installed, the indicator can be run in a local environment.
-- Run time is dependent on the length of pull/export window, which should be kept to a minimum
+The module name and venv/makefile information should be in the `README.md`. Provided the credentials and parameters are specified, and the necessary packages are installed, the indicator can be run in a local environment.
+- Run time is dependent on the length of pull/export window, which should be kept to a minimum.
 - If ran with `delphi_utils.runner`, validator and archive will also add time to the run.
 
 ### Directory Structure
 The `quidel_covidtest/` indicator directory is expected to have the following subdirectories and files. Many can be overwritten in `params.json` (see below).
 
-Run Module
+#### Run Module
 - `delphi_quidel_covidtest/` - Contains indicator code.
 - [Thought] A simple code breakdown would be great, but a massive timesink.
 
-Functional Directories/Files
+#### Functional Directories/Files
 - `backfill/` - Backfill dir for parquet files.
 - `cache/` - Input cache for pulled data.
 - `receiving/` - Contains csv export files.
@@ -66,7 +66,7 @@ Most parameter keys can be obtained from the template as long as the directories
 - Use `cp params.json.template params.json`
 - AWS credentials must be obtained legitimately; the indicator will fail without them.
 
-### Setting Dates
+#### Setting Dates
 - Pull start/end dates refer to the date range of input data obtained from Quidel.
 - Export start/end dates refer to csv export dates used in the `create_export_csv` function.
 - Latest exported file date will 5 days before the `export_end_date`; if set to null it will be 5 days before the current time.
@@ -113,7 +113,12 @@ Quidel utilizes the S3 archiver in production with indicator prefix `quidel`.
 - `common` section needs the `export_dir`, but `log_filename` can and should be used to aid in the case of issues.
 
 ### S3 Archive
-S3 archive differ should mainly be used by the production environment during a scheduled indicator run (not a manual run) as items in the S3 cache can be overwritten. Here are the archive parameters:
+S3 archive differ should mainly be used by the production environment during a scheduled indicator run (not a manual run) as items in the S3 cache can be overwritten. The archive parameters can be found below, which will most commonly be used in patching.
+- AWS keys need obtained legitimately (they have been redacted here).
+- These parameters will be needed to obtain the S3 cache for patching, but running `versions.py` will not overwrite the cache.
+
+#### Archive Parameters
+
 ```
 "common": {
     "export_dir": "receiving",
@@ -121,17 +126,14 @@ S3 archive differ should mainly be used by the production environment during a s
 },
 "archive": {
   "aws_credentials: {
-	  "aws_access_key_id": "",
+    "aws_access_key_id": "",
     "aws_secret_access_key": ""
-	},
-	"bucket_name": "delphi-covidcast-indicator-output",
+  },
+  "bucket_name": "delphi-covidcast-indicator-output",
   "cache_dir": "./archivediffer_cache",
   "indicator_prefix": "quidel"
 }
 ```
-NOTES: 
-- AWS keys need obtained legitimately (they are redacted here).
-- These parameters will be needed to obtain the S3 cache for patching, but running `versions.py` will not overwrite in the case or archiving.
 
 ### Filesystem Archive
 To use filesystem differ, the only key in `archive` should be the `cache_dir`. 
@@ -142,6 +144,7 @@ To use filesystem differ, the only key in `archive` should be the `cache_dir`.
 
 # Other Notes to Add
 - Validator and its parameters/functions.
+- Does delivery/transfer_files need any notes?
 - Backfill has new changes that may adjust setting params.
 - Common issues
 
