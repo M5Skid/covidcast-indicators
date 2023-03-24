@@ -62,9 +62,9 @@ The `params` argument is expected to have the following structure:
   "delivery_dir": str, directory for transfer files()
 ```
 
-Most param keys can be obtained from the template as long as the directories and files exist
+Most parameter keys can be obtained from the template as long as the directories and files exist
 - Use `cp params.json.template params.json`
-- AWS creds must be obtained legitimately; the indicator will fail without them.
+- AWS credentials must be obtained legitimately; the indicator will fail without them.
 
 ### Setting Dates
 - Pull start/end dates refer to the date range of input data obtained from Quidel.
