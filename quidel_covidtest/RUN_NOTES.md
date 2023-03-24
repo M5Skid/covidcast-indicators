@@ -31,7 +31,7 @@ Functional Directories/Files
 - `backfill/` - Backfill dir for parquet files.
 - `cache/` - Input cache for pulled data.
 - `receiving/` - Contains csv export files.
-- `logs/quidel-covidtest.log` - mMdule log printed by structured logger. Will contain additional logging if delphi_utils functions are run on the indicator (like validator)
+- `logs/quidel-covidtest.log` - Module log printed by structured logger. Will contain additional logging if delphi_utils functions are run on the indicator (such as validator).
 - `params.json` and `params.json.template` - user set parameters
 
 ### Parameter Notes
