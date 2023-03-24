@@ -113,11 +113,11 @@ Quidel utilizes the S3 archiver in production with indicator prefix `quidel`.
 - `common` section needs the `export_dir`, but `log_filename` can and should be used to aid in the case of issues.
 
 ### S3 Archive
-S3 archive differ should mainly be used by the production environment during a scheduled indicator run (not a manual run) as items in the S3 cache can be overwritten. Here are the archive params:
+S3 archive differ should mainly be used by the production environment during a scheduled indicator run (not a manual run) as items in the S3 cache can be overwritten. Here are the archive parameters:
 ```
 "common": {
     "export_dir": "receiving",
-    "log_filename": "dsew_cpr.log"
+    "log_filename": "./logs/quidel-covidtest.log"
 },
 "archive": {
   "aws_credentials: {
@@ -130,7 +130,7 @@ S3 archive differ should mainly be used by the production environment during a s
 }
 ```
 NOTES: 
-- AWS keys need obtained legitimately (redacted here).
+- AWS keys need obtained legitimately (they are redacted here).
 - These parameters will be needed to obtain the S3 cache for patching, but running `versions.py` will not overwrite in the case or archiving.
 
 ### Filesystem Archive
