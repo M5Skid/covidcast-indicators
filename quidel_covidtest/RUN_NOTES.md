@@ -16,12 +16,12 @@ Quidel sources information based on covid antigen test data. Signal data consist
 - [Question] How do we connect to it? Is this on Delphi's server?
 
 ## Running the Indicator
-The module name and venv/makefile information should be in the `README.md`. Provided the params are specified and the necessary packages installed, the indicator can be run in a local environment.
+The module name and venv/makefile information should be in the `README.md`. Provided the parameters are specified and the necessary packages installed, the indicator can be run in a local environment.
 - Run time is dependent on the length of pull/export window, which should be kept to a minimum
 - If ran with `delphi_utils.runner`, validator and archive will also add time to the run.
 
 ### Directory Structure
-The `quidel_covidtest/` indicator directory is expected to have the following subdirectories and files. Many can be overwritten in params.json (see below).
+The `quidel_covidtest/` indicator directory is expected to have the following subdirectories and files. Many can be overwritten in `params.json` (see below).
 
 Run Module
 - `delphi_quidel_covidtest/` - Contains indicator code.
