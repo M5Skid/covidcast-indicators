@@ -67,8 +67,36 @@ read_params <- function(path = "params.json", template_path = "params.json.templ
   # Model parameters
   if (!("taus" %in% names(params))) {params$taus <- TAUS}
   if (!("lambda" %in% names(params))) {params$lambda <- LAMBDA}
-  if (!("lp_solver" %in% names(params))) {params$lp_solver <- LP_SOLVER}
   if (!("lag_pad" %in% names(params))) {params$lag_pad <- LAG_PAD}
+
+  if ("lp_solver" %in% names(params)) {
+    params$lp_solver <- match.arg(params$lp_solver, c("gurobi", "glpk"))
+  } else {
+    params$lp_solver <- LP_SOLVER
+  }
+  if (params$lp_solver == "gurobi") {
+    # Make call to gurobi CLI to check license. Returns a status of `0` if
+    # license can be found and is valid.
+    tryCatch(
+      expr = {
+        license_status <- run_cli("gurobi_cl")
+      },
+      error=function(e) {
+        if (grepl("Error 10032: License has expired", e$message, fixed=TRUE)) {
+          stop("The gurobi license has expired. Please renew or switch to ",
+            "using glpk. lp_solver can be specified in params.json.")
+        }
+        msg_ts(e$message)
+        license_status <- 1
+      }
+    )
+
+    if (license_status != 0) {
+      warning("gurobi solver was requested but license information was ",
+        "not available or not valid; using glpk instead")
+      params$lp_solver <- "glpk"
+    }
+  }
 
   # Data parameters
   if (!("num_col" %in% names(params))) {params$num_col <- "num"}
@@ -91,13 +119,13 @@ read_params <- function(path = "params.json", template_path = "params.json.templ
       stop("`test_dates` setting in params must be a length-2 list of dates")
     }
     params$test_dates <- seq(
-      as.Date(params$test_dates[1]),
-      as.Date(params$test_dates[2]),
+      as.Date(params$test_dates[1], DATE_FORMAT),
+      as.Date(params$test_dates[2], DATE_FORMAT),
       by="days"
     )
   }
   if (params_element_exists_and_valid(params, "training_end_date")) {
-    if (as.Date(params$training_end_date) > TODAY) {
+    if (as.Date(params$training_end_date, DATE_FORMAT) > TODAY) {
       stop("training_end_date can't be in the future")
     }
   }
@@ -107,6 +135,13 @@ read_params <- function(path = "params.json", template_path = "params.json.templ
   }
   
   return(params)
+}
+
+#' Wrapper for `base::system2` for testing convenience
+#'
+#' @param command string to run as command
+run_cli <- function(command) {
+  system2(command)
 }
 
 #' Create directory if not already existing
@@ -189,7 +224,9 @@ validity_checks <- function(df, value_types, num_col, denom_col, signal_suffixes
 #' @param issue_date contents of input data's `issue_date` column
 #' @template training_days-template
 training_days_check <- function(issue_date, training_days) {
-  valid_training_days = as.integer(max(issue_date) - min(issue_date)) + 1
+  valid_training_days = as.integer(
+    as.Date(max(issue_date), DATE_FORMAT) - as.Date(min(issue_date), DATE_FORMAT)
+  ) + 1
   if (training_days > valid_training_days) {
     warning(sprintf("Only %d days are available at most for training.", valid_training_days))
   }
@@ -203,7 +240,7 @@ training_days_check <- function(issue_date, training_days) {
 get_populous_counties <- function() {
   return(
     covidcast::county_census %>%
-      dplyr::select(pop = POPESTIMATE2019, fips = FIPS) %>%
+      select(pop = POPESTIMATE2019, fips = FIPS) %>%
       # Drop megacounties (states)
       filter(!endsWith(fips, "000")) %>%
       arrange(desc(pop)) %>%

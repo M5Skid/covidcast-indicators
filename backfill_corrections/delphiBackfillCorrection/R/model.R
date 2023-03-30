@@ -131,7 +131,10 @@ model_training_and_testing <- function(train_data, test_data, taus, covariates,
 
         success = success + 1
       },
-      error=function(e) {msg_ts("Training failed for ", model_path)}
+      error=function(e) {
+        msg_ts("Training failed for ", model_path, ". Check that your gurobi ",
+          "license is valid and being passed properly to the program.")
+      }
     )
   }
   if (success < length(taus)) {return (NULL)}
@@ -183,11 +186,8 @@ evaluate <- function(test_data, taus) {
 exponentiate_preds <- function(test_data, taus) {
   pred_cols = paste0("predicted_tau", taus)
 
-  # Drop original predictions and join on exponentiated versions
-  test_data = bind_cols(
-    select(test_data, -starts_with("predicted")),
-    exp(test_data[, pred_cols])
-  )
+  # Replace original predictions with exponentiated versions
+  test_data[, pred_cols] <- exp(test_data[, pred_cols])
 
   return(test_data)
 }
