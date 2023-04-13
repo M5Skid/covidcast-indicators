@@ -7,7 +7,7 @@ import multiprocessing
 import time
 from .archive import ArchiveDiffer, archiver_from_params
 from .logger import get_structured_logger
-from .utils import read_params, transfer_files, delete_move_files
+from .utils import read_params, transfer_files, delete_move_files, version_check
 from .validator.validate import Validator
 from .validator.run import validator_from_params
 
@@ -51,18 +51,10 @@ def run_indicator_pipeline(indicator_fn:  Callable[[Params], None],
 
     #Get version and indicator name for startup
     ind_name = indicator_fn.__module__.replace(".run", "")
-    #Check for version.cfg in indicator directory
-    if os.path.exists("version.cfg"):
-        with open("version.cfg") as ver_file:
-            current_version = "not found"
-            for line in ver_file:
-                if "current_version" in line:
-                    current_version = str.strip(line)
-                    current_version = current_version.replace("current_version = ", "")
+    current_version = version_check()
     #Logging - Starting Indicator
-        logger.info(f"Started {ind_name} with covidcast-indicators version {current_version}")
-    else: logger.info(f"Started {ind_name} without version.cfg")
-
+    logger.info(f"Started {ind_name} with covidcast-indicators version {current_version}")
+    
     indicator_fn(params)
     validator = validator_fn(params)
     archiver = archiver_fn(params)

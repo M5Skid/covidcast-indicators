@@ -125,3 +125,14 @@ def delete_move_files():
                     os.path.join(validation_failure_dir, file_name))
             else:
                 os.remove(os.path.join(export_dir, file_name))
+
+def version_check():
+#Check for version.cfg in indicator directory
+    current_version = "not found"
+    if os.path.exists("version.cfg"):
+        with open("version.cfg") as ver_file:
+            for line in ver_file:
+                if "current_version" in line:
+                    current_version = str.strip(line)
+                    current_version = current_version.replace("current_version = ", "")
+    return current_version
